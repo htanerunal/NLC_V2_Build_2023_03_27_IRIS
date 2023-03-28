@@ -54,10 +54,10 @@ int main(int argc, const char * argv[]) {
 
     //Dataset dependent variables
     int outputCount=2;//Bit length of output class
-    int numberOfClasses = 4;
+    int numberOfClasses = 4;//Max value for output bits
 
 
-    //Read CSV File
+    //Read CSV File and collect info on data
     std::ifstream myFile("dataset.csv");
     std::string line, colName;
     int val;
@@ -92,18 +92,16 @@ int main(int argc, const char * argv[]) {
     myFile.close();
     int numberOfInputBits = colNumber - outputCount;//except column 0
 
-    //Now, let's print info on dataset
+    //Now, let's print this info
     printf("Number of input bits:");printf("%d", numberOfInputBits);printf("\n");
     printf("Number of rows:");printf("%d", numberOfTotalRows);printf("\n");
 
     //Define raw data variables
     bool X_raw[numberOfTotalRows][numberOfInputBits];
     bool y_raw[numberOfTotalRows][outputCount];
-    int y_class[numberOfTotalRows];
+    int y_class[numberOfTotalRows];//Encoded integer for any categorical variable
 
-
-
-    //Read the file again and fill dataset variables with data
+    //Read the file again and fill dataset variables with raw data
     std::ifstream myFileAgain("dataset.csv");
     std::getline(myFileAgain, line);
 
@@ -133,7 +131,7 @@ int main(int argc, const char * argv[]) {
     // Close file
     myFileAgain.close();
 
-    //Get y classes
+    //Read classes of categorical outputs
     for (int i=0;i<numberOfTotalRows;i++)
     {
         y_class[i]=0;
@@ -143,23 +141,25 @@ int main(int argc, const char * argv[]) {
         }
     }
 
+    //Define evaluation method (kFold or train-test split)
     bool isKFold = true;
+
+    //kFold parameters
     int numberOfK = 5;
     int currentFold=1;
+    //**** Important Note *******
+    //kFold cross validation is managed MANUALLY
+    //You have to change the current fold on each run.
+    //Record results and calculate MEAN/STD manually
 
+    //Train-Test Split variables
+    float train_test_split = 0.75;
+
+    //Generic variables for train-test chunks
     int numberOfTrainSamples;
     int numberOfTestSamples;
 
-    //Train-Test Split variables
-    float train_test_split;
-
-
-    train_test_split = 0.75;
-
-
-
-
-
+    //Bit-level variables to store data
     bool X_train[numberOfTotalRows][numberOfInputBits];
     bool y_train[numberOfTotalRows][outputCount];
 
@@ -169,25 +169,24 @@ int main(int argc, const char * argv[]) {
     int y_train_class[numberOfTotalRows];
     int y_test_class[numberOfTotalRows];
 
-
-
-
+    //Start splitting the data
+    //Split data for cross-validation
     if (isKFold)
     {
-        //Based on number of K, calculate standard test samples by rounding the equal chunks
+        //Determine standard test size
         int testStandardSampleCount = roundP((float)numberOfTotalRows/(float)numberOfK);
-        //For the last K, set the variable as the remaining samples
+        //For the last K-fold, set the size as the remaining samples
         if (currentFold<numberOfK-1) numberOfTestSamples = testStandardSampleCount;
         else numberOfTestSamples = (numberOfTotalRows - ((numberOfK-1)*testStandardSampleCount));
-
+        //Determine train size
         numberOfTrainSamples = numberOfTotalRows - numberOfTestSamples;
-
+        //Print summary on the current fold
         printf("K-Fold Data----------------------\n");
         printf("Current K fold:%d\n",currentFold);
         printf("Number of train samples:");printf("%d",numberOfTrainSamples);printf("\n");
         printf("Number of test samples:");printf("%d",numberOfTestSamples);printf("\n");
 
-        //Create a shuffled index
+        //Shuffle raw data by creating a shuffle index
         int indexArray[numberOfTotalRows];
         for (int i=0;i<numberOfTotalRows;i++) indexArray[i] = i;
         randomShuffleInt(indexArray,numberOfTotalRows);
@@ -203,6 +202,7 @@ int main(int argc, const char * argv[]) {
             currentTrainRow++;
         }
 
+        //Skip test fold and continue filling train rows (X)
         if (currentFold!=numberOfK-1) {
             for (int x = ((currentFold + 1) * testStandardSampleCount); x < numberOfTotalRows; x++) {
                 for (int c = 0; c < numberOfInputBits; c++) {
@@ -224,6 +224,7 @@ int main(int argc, const char * argv[]) {
             currentTrainRow++;
         }
 
+        //Skip test fold and continue filling train rows (y)
         if (currentFold!=numberOfK-1) {
             for (int y = ((currentFold + 1) * testStandardSampleCount); y < numberOfTotalRows; y++) {
                 for (int c = 0; c < outputCount; c++) {
@@ -251,12 +252,9 @@ int main(int argc, const char * argv[]) {
             currentTestRow++;
         }
 
-
-        //Print shuffled dataset
+        //Print shuffled dataset (FULL)
         printf("\n");
         printf("Printing Shuffled Dataset\n");
-
-        printf("Printing Full Shuffled\n");
         for (int i=0;i<numberOfTotalRows;i++)
         {
             printf("INDEX:%d DATA x: ",indexArray[i]);
@@ -273,6 +271,7 @@ int main(int argc, const char * argv[]) {
             printf("%d",y_class[indexArray[i]]);
             printf("\n");
         }
+        //Now, print train data
         printf("\n");
         printf("TRAIN:\n");
         currentTrainRow = 0;
@@ -293,6 +292,7 @@ int main(int argc, const char * argv[]) {
             printf("\n");
             currentTrainRow++;
         }
+        //Skip test fold and continue printing train data
         if (currentFold!=numberOfK-1)
         {
             for (int i = ((currentFold + 1) * testStandardSampleCount); i < numberOfTotalRows; i++)
@@ -314,7 +314,7 @@ int main(int argc, const char * argv[]) {
             }
         }
 
-        //Print test
+        //Print test data
         currentTestRow=0;
         printf("\n\nTEST:\n");
         for (int i=(currentFold*testStandardSampleCount);i<((currentFold*testStandardSampleCount) + numberOfTestSamples);i++)
@@ -335,21 +335,27 @@ int main(int argc, const char * argv[]) {
             currentTestRow++;
         }
     }
+    //K-Fold is over.
+    //If evaluation method is selected as train-test split, fill train-test arrays below
     else
     {
+        //Determine train-test size
         numberOfTrainSamples = (int)(numberOfTotalRows * train_test_split);
         numberOfTestSamples = numberOfTotalRows - numberOfTrainSamples;
 
+        //Print info
         printf("Number of train samples:");printf("%d",numberOfTrainSamples);printf("\n");
         printf("Number of test samples:");printf("%d",numberOfTestSamples);printf("\n");
 
+        //Shuffle whole dataset by creating a shuffle index
         int indexArray[numberOfTotalRows];
         for (int i=0;i<numberOfTotalRows;i++)
         {
             indexArray[i] = i;
         }
         randomShuffleInt(indexArray,numberOfTotalRows);
-        //fill train rows
+
+        //fill train rows (X)
         for (int x=0;x<numberOfTrainSamples;x++)
         {
             for (int c=0;c<numberOfInputBits;c++)
@@ -357,6 +363,8 @@ int main(int argc, const char * argv[]) {
                 X_train[x][c] = X_raw[indexArray[x]][c];
             }
         }
+
+        //fill train rows (y)
         for (int y=0;y<numberOfTrainSamples;y++)
         {
             for (int c=0;c<outputCount;c++)
@@ -365,7 +373,8 @@ int main(int argc, const char * argv[]) {
             }
             y_train_class[y] = y_class[indexArray[y]];
         }
-        //fill test rows
+
+        //fill test rows (X)
         for (int x=0;x<numberOfTestSamples;x++)
         {
             for (int c=0;c<numberOfInputBits;c++)
@@ -373,6 +382,8 @@ int main(int argc, const char * argv[]) {
                 X_test[x][c] = X_raw[indexArray[numberOfTrainSamples + x]][c];
             }
         }
+
+        //fill test rows (y)
         for (int y=0;y<numberOfTestSamples;y++)
         {
             for (int c=0;c<outputCount;c++)
@@ -381,7 +392,28 @@ int main(int argc, const char * argv[]) {
             }
             y_test_class[y] = y_class[indexArray[numberOfTrainSamples + y]];
         }
-        //Print shuffled dataset
+
+        //Print shuffled dataset (FULL)
+        printf("\n");
+        printf("Printing Shuffled Dataset\n");
+        for (int i=0;i<numberOfTotalRows;i++)
+        {
+            printf("INDEX:%d DATA x: ",indexArray[i]);
+            for (int c=0;c<numberOfInputBits;c++)
+            {
+                printf("%d ",X_raw[indexArray[i]][c]);
+            }
+            printf(" y: ");
+            for (int c=0;c<outputCount;c++)
+            {
+                printf("%d ",y_raw[indexArray[i]][c]);
+            }
+            printf(" class: ");
+            printf("%d",y_class[indexArray[i]]);
+            printf("\n");
+        }
+
+        //Print train data
         printf("\n");
         printf("Printing Shuffled Dataset\n");
         printf("TRAIN:\n");
@@ -401,7 +433,8 @@ int main(int argc, const char * argv[]) {
             printf("%d",y_train_class[i]);
             printf("\n");
         }
-        //Print test
+
+        //Print test data
         printf("\n\nTEST:\n");
         for (int i=0;i<numberOfTestSamples;i++)
         {
@@ -419,27 +452,25 @@ int main(int argc, const char * argv[]) {
             printf("%d",y_test_class[i]);
             printf("\n");
         }
-
     }
 
 
 
     //Let's Define GA Parameters
-    //Determine population size manually
+    //Determine population size
     int populationSize = 1000;
     //Number of gates for each population
     int gateCount[populationSize];
-    //Determine iteration count manually
+    //Determine iteration count
     int iterationCount = 70000;
-    //Define initial max number of gates. This number will be increased gradually over iterations
-    float initialMaxGates = 18.0f;
+    //Define max number of gates (GA will randomly assign gate count to each population).
+    float maxGates = 18.0f;
     //Number of max connections for each gate. Determined randomly (minimum=2)
-    int connectMax = 5;
+    int maxConnections = 5;
     //Are we going to use XOR gates (XOR-XNOR)?
     bool useXOR= true;
     int maxGateType;
     if (useXOR) maxGateType=5;else maxGateType=3;
-    bool useKFold = true;
 
     //Define column strings
     //popBits are connection masks for each gate. 1 denotes a connection and 0 denotes no connection
@@ -447,15 +478,15 @@ int main(int argc, const char * argv[]) {
     //popGateType are gate types (AND, OR, XOR etc.)
     int *popGateType[populationSize];
 
-    //Output Source
+    //Output Source (determines which gates will be selected as multi-class outputs)
     int outputSource[populationSize][outputCount];
 
-    //Define advanced metrics matrix
-    int scoreMatrix[populationSize][numberOfClasses][numberOfClasses];
+    //Define array variable for advanced confusion matrix (NxN N=number of classes)
+    int confusionMatrix[populationSize][numberOfClasses][numberOfClasses];
 
-    //Population accuracies
-    float popAcc[populationSize];
-    float popAccNet[populationSize];
+    //Population accuracies (train)
+    float trainScore[populationSize];
+    float trainAccuracy[populationSize];
 
     //Tournament Selection Parameter
     float tournamentRate = 0.05f;
@@ -474,6 +505,8 @@ int main(int argc, const char * argv[]) {
     int popCountElite = (int)((float)populationSize*elitismRate);
 
     //Augmentation parameters
+    //*****Important Note******
+    //Augmentation will not be executed for multi-class classification
     float augmentationRate = 1.00000f;//How the number of gates will increase
     int maxGatesWithAugmentation;//TBD
     float augmentationPopRate = 0.00f;//What portion of population will be replaced with new, augmented networks
@@ -483,8 +516,8 @@ int main(int argc, const char * argv[]) {
     //Create Initial Population
     for (int popIndex=0; popIndex < populationSize; popIndex++)
     {
-        //Determine random number of gates
-        gateCount[popIndex] = (int)initialMaxGates;//random(1, (int)initialMaxGates);
+        //Create random number of gates
+        gateCount[popIndex] = (int)maxGates;//random(1, (int)maxGates);
         popBits[popIndex] = new bool*[gateCount[popIndex]];
         popGateType[popIndex] = new int[gateCount[popIndex]];
 
@@ -503,16 +536,16 @@ int main(int argc, const char * argv[]) {
             popGateType[popIndex][gateIndex]= random(0, maxGateType);
             //Let's start randomly filling gate masks
             //Define sub array
-            //The length of array is number of inputs+gate index (gateindex+numberOfInputBits)
+            //The length of array is the number of inputs+gate index (gateindex+numberOfInputBits)
             popBits[popIndex][gateIndex]=new bool [gateIndex + numberOfInputBits];
             //Determine connections count randomly
-            int connectionsCount = random(2, connectMax);
+            int connectionsCount = random(2, maxConnections);
             //Fill connection count times True (1)
             if ((gateIndex+numberOfInputBits)<=connectionsCount)
             {
                 for (int i=0;i<(numberOfInputBits+gateIndex);i++) popBits[popIndex][gateIndex][i]=true;
             }
-                //Fill the rest with false
+            //Fill the rest with false
             else {
                 for (int i=0;i<connectionsCount;i++) popBits[popIndex][gateIndex][i]=true;
                 for (int i=connectionsCount; i < (gateIndex + numberOfInputBits); i++) popBits[popIndex][gateIndex][i]=false;
@@ -521,9 +554,8 @@ int main(int argc, const char * argv[]) {
             //Now shuffle 1s with 0s - there you have a random mask! We call this Neuroplasticity...
             //Our brain is doing it many times a day :)
             randomShuffle(popBits[popIndex][gateIndex], gateIndex + numberOfInputBits);
-            //printArray(popBits[popIndex][gateIndex], gateIndex + numberOfInputBits);
 
-        }//End of gateIndex
+        }//End of creating gates (gateIndex)
 
         //Initialize Output Source
         for (int i=0;i<outputCount;i++)
@@ -536,51 +568,43 @@ int main(int argc, const char * argv[]) {
     bool **popBitsAfterMutation[populationSize];
     int *popGateTypeAfterMutation[populationSize];
     int gateCountAfterMutation[populationSize];
-
     int outputSourceAfterMutation[populationSize][outputCount];
 
-    float testAccOnIterations;
-    float testAccNetOnIterations;
+    float testAccuracyRawOnEachIteration;
+    float testAccuracyNetOnEachIteration;
 
-    float bestTestAcc=0;
-    int bestTestAccIndex;
-    int bestTestAccIteration;
-    bool bestTestAccChanged;
+    float bestTestAccuracyRaw=0;
+    int bestTestAccuracyRawPopIndex;
+    int bestTestAccuracyRawIteration;
+    bool bestTestAccRawChanged;
 
-    float bestTestAccNet=0;
-    int bestTestAccNetIndex;
-    int bestTestAccNetIteration;
+    float bestTestAccuracyNet=0;
+    int bestTestAccuracyNetPopIndex;
+    int bestTestAccuracyNetIteration;
     bool bestTestAccNetChanged;
 
-    float trainAccOnEachIteration[iterationCount];
-    float testAccOnEachIteration[iterationCount];
+    float trainScoreOnEachIteration[iterationCount];
+    float testAccuracyOnEachIteration[iterationCount];
 
-    float trainAccNetOnEachIteration[iterationCount];
-    float testAccNetOnEachIteration[iterationCount];
+    float trainAccuracyOnIterations[iterationCount];
+    float testAccNetOnIterations[iterationCount];
 
-    float bestTrainAcc = 0.0f;
-    int bestTrainAccIndex;
-    int bestTrainAccIteration;
-    bool bestTrainAccChanged;
+    float bestTrainScore = 0.0f;
+    int bestTrainScoreIndex;
+    int bestTrainScoreIteration;
+    bool bestTrainScoreChanged;
 
-    float bestTrainAccNet;
-    int bestTrainAccNetIndex;
-    int bestTrainAccNetIteration;
-    bool bestTrainAccNetChanged;
-
-    //Record best train acc
+    float bestTrainAccuracy;
+    int bestTrainAccuracyPopIndex;
+    int bestTrainAccuracyIteration;
+    bool bestTrainAccuracyChanged;
 
     //Let's start GA loop
     for (int iterationIndex=0;iterationIndex<iterationCount;iterationIndex++)
     {
-        //Update maxGates for augmentation
-        //initialMaxGates *= augmentationRate;//5.2f;//*= (float)augmentationRate;
-
-
         //SITREP for Iteration
         printf("Iteration: %d,\n",iterationIndex);
-        printf("Max Gates Float:%.2f\n",initialMaxGates);
-        printf("Max Gates:%d\n",(int)initialMaxGates);
+        printf("Max Gates:%d\n",(int)maxGates);
 
         //Re-initialize loop (transfer values from the last iteration)
         if (iterationIndex!=0)
@@ -599,29 +623,37 @@ int main(int argc, const char * argv[]) {
                 }
                 for (int i=0;i<outputCount;i++)
                     outputSource[popIndex][i] = outputSourceAfterMutation[popIndex][i];
-
             }
         }
 
-        //Calculate accuracies of each population (train)
-        float bestTrainAccInPop=0;
-        float bestTrainAccNetInPop=0;
+        //Calculate train score of each population
+        float bestTrainScoreInPop=0;
+        float bestTrainAccuracyInPop=0;
         for (int popIndex = 0; popIndex < populationSize; popIndex++) {
             int numberOfCorrect = 0;
             int numberOfCorrectNet = 0;
+
+            //Here we define a new variable for NLCv2
+            //It is called y_match_count
+            //It is a 2-Dimensional matrix (output bits x gates), showing which gate (including the inputs)
+            //is the most suitable to be selected as connected to an output bit
+            //by statistically collecting matching data
+            //We check every row of train data and increment y_match_count of designated cell
+            //if it matches with the output data
             int y_match_count[outputCount][numberOfInputBits + gateCount[popIndex]];
             //Zeroize y-match-count
             for (int i=0;i<outputCount;i++) {
                 for (int j = 0; j < (numberOfInputBits + gateCount[popIndex]); j++)
                     y_match_count[i][j] = 0;
             }
-            //Define bit output
+            //Define bit output of each gate (including inputs)
             bool bitOutput[numberOfTrainSamples][numberOfInputBits + gateCount[popIndex]];
             //Start with iterating through input rows
             for (int rowIndex = 0; rowIndex < numberOfTrainSamples; rowIndex++) {
                 //First fill bitOutput with inputs
                 for (int colIndex = 0; colIndex < numberOfInputBits; colIndex++) {
                     bitOutput[rowIndex][colIndex] = X_train[rowIndex][colIndex];
+                    //Increment dedicated cell if bitOutput matches output
                     for (int yIndex=0;yIndex<outputCount;yIndex++)
                         if (y_train[rowIndex][yIndex]==bitOutput[rowIndex][colIndex]) y_match_count[yIndex][colIndex]++;
                 }
@@ -659,12 +691,24 @@ int main(int argc, const char * argv[]) {
                                                                                              (gateIndex + numberOfInputBits));
                             break;
                     }//end of gate switch
+                    //Again, increment y_match_count of dedicated cell it bitOutput matches output
+                    //This will help us understand which gates are the most suitable to be selected as outputs of our network
                     for (int yIndex=0;yIndex<outputCount;yIndex++) {
                         if (y_train[rowIndex][yIndex] == bitOutput[rowIndex][numberOfInputBits + gateIndex])
                             y_match_count[yIndex][numberOfInputBits + gateIndex]++;
                     }
                 }//end loop for gate index
 
+                //This is one of the most critical part of the process.
+                //We check each gate (including outputs) and find the max suitable gate
+                //to be assigned as output source.
+                //Then, to make a simple calculation, we count the matching bits.
+                //The number of matching bits is used as the primary reference for calculating GA fitness.
+                //We will call it as 'Training score'.
+
+                //The trick here is, we increment the matching bits in a cumulative way.
+                //We could do this after completing the entire training rows but moving the step
+                //here helps GA to converge faster.
                 for (int yIndex=0;yIndex<outputCount;yIndex++) {
                     outputSource[popIndex][yIndex] = findMaxSourceIndex(y_match_count[yIndex],
                                                                         numberOfInputBits + gateCount[popIndex]);
@@ -672,13 +716,12 @@ int main(int argc, const char * argv[]) {
                                                           numberOfInputBits + gateCount[popIndex]);
                 }
 
-            }//end loop for Rows
+            }//end loop for Rows. Now we went over all training samples in the dataset.
 
-            //Now, we can check if the last gate (output) is equal to expected output
-
-
-            //if (bitOutput[numberOfInputBits + gateCount[popIndex] - 1] == y_train[rowIndex][0]) numberOfCorrect++;
-            if (iterationIndex==0 && popIndex==0) printf("Output Source:%d:%d",outputSource[0][0],outputSource[0][1]);
+            //As we determined the output sources (best gates to be selected as outputs)
+            //now, we can go over the training samples again and calculate training accuracy.
+            //IT should be noted that, training accuracy won't be used as GA fitness.
+            //It is just a performance indicator during the algorithm run.
             for (int rX=0;rX<numberOfTrainSamples;rX++) {
                 bool rowFullyCorrect = true;
                 for (int mIndex = 0; mIndex < outputCount; mIndex++) {
@@ -688,77 +731,70 @@ int main(int argc, const char * argv[]) {
                 if (rowFullyCorrect) numberOfCorrectNet++;
             }
 
+            //Now, it is time to calculate training score. We divide it to 1000 to make the number smaller. No other reason;
+            trainScore[popIndex] = (float) numberOfCorrect / (float) (1000);
+            //We can also calculate the training accuracy of this population member
+            trainAccuracy[popIndex] = (float) numberOfCorrectNet / (float) (numberOfTrainSamples);
 
-
-            popAcc[popIndex] = (float) numberOfCorrect / (float) (numberOfTrainSamples * outputCount);
-            //printf("\n Number of train samples:%d -- Output count:%d  Number of correct:%d",numberOfTrainSamples,outputCount, numberOfCorrect);
-            popAccNet[popIndex] = (float) numberOfCorrectNet / (float) (numberOfTrainSamples);
-            if (iterationIndex==0) printf("Pop:%d CORRECT:%d\n",popIndex,numberOfCorrectNet);
-
-            if (popAcc[popIndex]>bestTrainAccInPop)
+            //Once we get higher scores, we mark it as the new best (of the current iteration).
+            if (trainScore[popIndex] > bestTrainScoreInPop)
             {
-                bestTrainAccInPop = popAcc[popIndex];
-                bestTrainAccNetInPop = popAccNet[popIndex];
+                bestTrainScoreInPop = trainScore[popIndex];
+                bestTrainAccuracyInPop = trainAccuracy[popIndex];
             }
 
-            if (bestTrainAccInPop > bestTrainAcc)
+            //In order to monitor progress, we refresh and get the new best in the whole GA run
+            if (bestTrainScoreInPop > bestTrainScore)
             {
-                bestTrainAcc = bestTrainAccInPop;
-                bestTrainAccIndex = popIndex;
-                bestTrainAccIteration = iterationIndex;
-                bestTrainAccChanged = true;
+                bestTrainScore = bestTrainScoreInPop;
+                bestTrainScoreIndex = popIndex;
+                bestTrainScoreIteration = iterationIndex;
+                bestTrainScoreChanged = true;
 
-                bestTrainAccNet = bestTrainAccNetInPop;
-                bestTrainAccNetIndex = popIndex;
-                bestTrainAccNetIteration = iterationIndex;
-                bestTrainAccNetChanged = true;
+                bestTrainAccuracy = bestTrainAccuracyInPop;
+                bestTrainAccuracyPopIndex = popIndex;
+                bestTrainAccuracyIteration = iterationIndex;
+                bestTrainAccuracyChanged = true;
 
-
-
-                printf("\n*************** Printing Gates for the new best on TRAIN Accuracy **********\n");
-                printf("Iteration: %d\n",bestTrainAccIteration);
-                printf("Population member: %d\n",bestTrainAccIndex);
-                printf("Train accuracy (RAW): %f\n",popAcc[bestTrainAccIndex]);
-                printf("Train accuracy (NET): %f\n",popAccNet[bestTrainAccIndex]);
-                printf("Gate count for best pop: %d\n",gateCount[bestTrainAccIndex]);
+                //Once we get the new best, print the network and accuracy details
+                printf("\n*************** Printing Gates for the new best on TRAIN Score **********\n");
+                printf("Iteration: %d\n", bestTrainScoreIteration);
+                printf("Population member: %d\n", bestTrainScoreIndex);
+                printf("Train Score: %f\n", trainScore[bestTrainScoreIndex]);
+                printf("Train accuracy: %f\n", trainAccuracy[bestTrainScoreIndex]);
+                printf("Gate count for best pop: %d\n",gateCount[bestTrainScoreIndex]);
                 printf("--------------------------------------------------\n");
-                for (int gIndex=0;gIndex<gateCount[bestTrainAccIndex];gIndex++)
+                for (int gIndex=0;gIndex<gateCount[bestTrainScoreIndex]; gIndex++)
                 {
                     printf("Gate: %d",gIndex);
                     printf("\n");
-                    printf("Gate type: %d\n",popGateType[bestTrainAccIndex][gIndex]);
+                    printf("Gate type: %d\n",popGateType[bestTrainScoreIndex][gIndex]);
                     printf("Gate connections:\n");
-                    printArray(popBits[bestTrainAccIndex][gIndex], gIndex + numberOfInputBits);
+                    printArray(popBits[bestTrainScoreIndex][gIndex], gIndex + numberOfInputBits);
                 }
                 printf("*************** End of Printing Gates **********\n");
                 printf("Printing output sources\n");
                 for (int i=0;i<outputCount;i++)
-                    printf("%d ",outputSource[bestTrainAccIndex][i]);
+                    printf("%d ",outputSource[bestTrainScoreIndex][i]);
                 printf("\n-------------------------------\n");
             }
 
-        }//end loop for popIndex (Calculate accuracies)
-        trainAccOnEachIteration[iterationIndex] = bestTrainAccInPop;
-        trainAccNetOnEachIteration[iterationIndex] = bestTrainAccNetInPop;
+        }//end loop for popIndex
+        trainScoreOnEachIteration[iterationIndex] = bestTrainScoreInPop;
+        trainAccuracyOnIterations[iterationIndex] = bestTrainAccuracyInPop;
 
-
-
-        //Calculate test accuracy and report
-
+        //Now, we calculate test accuracy in this iteration and report the best among populations
         float bestTestAccInPop=0;
         float bestTestAccNetInPop=0;
         for (int popIndex = 0; popIndex < populationSize; popIndex++) {
             int numberOfCorrect = 0;
             int numberOfCorrectNet = 0;
-            int TP = 0;
-            int FP = 0;
-            int TN = 0;
-            int FN = 0;
+            //Zeroize confusion matrix
             for (int p=0;p<numberOfClasses;p++)
             {
                 for (int p1=0;p1<numberOfClasses;p1++)
                 {
-                    scoreMatrix[popIndex][p][p1]=0;
+                    confusionMatrix[popIndex][p][p1]=0;
                 }
             }
             //Define bit output
@@ -804,34 +840,34 @@ int main(int argc, const char * argv[]) {
                     }//end of gate switch
                 }//end loop for gate index
 
-                //Now, we can check if the last gate (output) is equal to expected output
-                //if (bitOutput[numberOfInputBits + gateCount[popIndex] - 1] == y_test[rowIndex][0]) numberOfCorrect++;
+
+                //Increment number of correct prediction if it matches test output
+                //This is going to be used to calculate raw accuracy.
+                //Raw test accuracy means how many bits in the total output columns matches with the correct ones.
+                //This is different from the test accuracy and usually higher than the net accuracy.
                 for (int r=0;r<outputCount;r++)
                     if (y_test[rowIndex][r] == bitOutput[outputSource[popIndex][r]]) numberOfCorrect++;
 
+                //Now, we can calculate the net accuracy by checking if all bits match to expected output
                 bool rowFullyCorrect = true;
                 for (int mIndex=0;mIndex<outputCount;mIndex++)
                 {
                     if (y_test[rowIndex][mIndex] != bitOutput[outputSource[popIndex][mIndex]]) rowFullyCorrect= false;
                 }
-
-                /*if (y_test[rowIndex][0] == bitOutput[outputSource[popIndex][0]] &&
-                    y_test[rowIndex][1] == bitOutput[outputSource[popIndex][1]] &&
-                    y_test[rowIndex][2] == bitOutput[outputSource[popIndex][2]] &&
-                    y_test[rowIndex][3] == bitOutput[outputSource[popIndex][3]]) numberOfCorrectNet++;
-                */
-
                 if (rowFullyCorrect) numberOfCorrectNet++;
 
+                //We populate confusion matrix by filling the 2D array.
+                //First, we need to know the category output of our network.
                 bool outputBits[outputCount];
                 for (int h=0;h<outputCount;h++) outputBits[h] = bitOutput[outputSource[popIndex][h]];
+                //Then, fill the relevant cell with the predicted/actual class.
+                confusionMatrix[popIndex][getClass(outputBits, outputCount)][y_test_class[rowIndex]]++;
 
-                scoreMatrix[popIndex][getClass(outputBits,outputCount)][y_test_class[rowIndex]]++;
+            }//end loop for Rows. Test samples are complete.
 
-            }//end loop for Rows
-            float testAcc = (float) numberOfCorrect / (float) (numberOfTestSamples * outputCount);
-            float testAccNet = (float) numberOfCorrectNet / (float) (numberOfTestSamples);
-
+            //Now, let's calculate the test accuracy
+            float testAcc = (float) numberOfCorrect / (float) (numberOfTestSamples * outputCount);//RAW
+            float testAccNet = (float) numberOfCorrectNet / (float) (numberOfTestSamples);//NET
 
             //Record best test acc in population
             if (testAccNet>bestTestAccNetInPop)
@@ -841,49 +877,48 @@ int main(int argc, const char * argv[]) {
             }
 
             //Record best test acc overall
-            if (testAccNet > bestTestAccNet)
+            if (testAccNet > bestTestAccuracyNet)
             {
-                bestTestAcc = testAcc;
-                bestTestAccIndex = popIndex;
-                bestTestAccIteration = iterationIndex;
-                bestTestAccChanged = true;
+                bestTestAccuracyRaw = testAcc;
+                bestTestAccuracyRawPopIndex = popIndex;
+                bestTestAccuracyRawIteration = iterationIndex;
+                bestTestAccRawChanged = true;
 
-                bestTestAccNet = testAccNet;
-                bestTestAccNetIndex = popIndex;
-                bestTestAccNetIteration = iterationIndex;
+                bestTestAccuracyNet = testAccNet;
+                bestTestAccuracyNetPopIndex = popIndex;
+                bestTestAccuracyNetIteration = iterationIndex;
                 bestTestAccNetChanged = true;
 
-
-
+                //Print the best to monitor progress
                 printf("\n*************** Printing Gates for the new best on Test Accuracy **********\n");
-                printf("Iteration: %d\n",bestTestAccIteration);
-                printf("Population member: %d\n",bestTestAccIndex);
-                printf("Train accuracy (RAW): %f\n",popAcc[bestTestAccIndex]);
-                printf("Test accuracy (RAW): %f\n",bestTestAcc);
-                printf("Train accuracy (NET): %f\n",popAccNet[bestTestAccIndex]);
-                printf("Test accuracy (NET): %f\n",bestTestAccNet);
-                printf("Gate count for best pop: %d\n",gateCount[bestTestAccIndex]);
+                printf("Iteration: %d\n", bestTestAccuracyRawIteration);
+                printf("Population member: %d\n", bestTestAccuracyRawPopIndex);
+                printf("Train Score: %f\n", trainScore[bestTestAccuracyRawPopIndex]);
+                printf("Test accuracy (RAW): %f\n", bestTestAccuracyRaw);
+                printf("Train accuracy: %f\n", trainAccuracy[bestTestAccuracyRawPopIndex]);
+                printf("Test accuracy (NET): %f\n", bestTestAccuracyNet);
+                printf("Gate count for best pop: %d\n",gateCount[bestTestAccuracyRawPopIndex]);
                 printf("--------------------------------------------------\n");
-                for (int gIndex=0;gIndex<gateCount[bestTestAccIndex];gIndex++)
+                for (int gIndex=0;gIndex<gateCount[bestTestAccuracyRawPopIndex]; gIndex++)
                 {
                     printf("Gate: %d",gIndex);
-                    if (gIndex==gateCount[bestTestAccIndex]-1) printf(" (Output gate)");
+                    if (gIndex== gateCount[bestTestAccuracyRawPopIndex] - 1) printf(" (Output gate)");
                     printf("\n");
-                    printf("Gate type: %d\n",popGateType[bestTestAccIndex][gIndex]);
+                    printf("Gate type: %d\n",popGateType[bestTestAccuracyRawPopIndex][gIndex]);
                     printf("Gate connections:\n");
-                    printArray(popBits[bestTestAccIndex][gIndex], gIndex + numberOfInputBits);
+                    printArray(popBits[bestTestAccuracyRawPopIndex][gIndex], gIndex + numberOfInputBits);
                 }
                 printf("*************** End of Printing Gates **********\n");
                 printf("Printing output sources\n");
                 for (int i=0;i<outputCount;i++)
-                    printf("%d ",outputSource[bestTestAccIndex][i]);
+                    printf("%d ",outputSource[bestTestAccuracyRawPopIndex][i]);
                 printf("\n-------------------------------\n");
                 printf("Confusion Matrix\n");
                 for (int i=0;i<numberOfClasses;i++)
                 {
                     for (int j=0;j<numberOfClasses;j++)
                     {
-                        printf("%d ",scoreMatrix[bestTestAccIndex][i][j]);
+                        printf("%d ", confusionMatrix[bestTestAccuracyRawPopIndex][i][j]);
                     }
                     printf("\n");
                 }
@@ -893,11 +928,11 @@ int main(int argc, const char * argv[]) {
                 {
                     printf("Class:%d\n",i);
                     int sumHorizontal = 0;
-                    for (int a=0;a<numberOfClasses;a++) sumHorizontal+=scoreMatrix[bestTestAccIndex][i][a];
+                    for (int a=0;a<numberOfClasses;a++) sumHorizontal+=confusionMatrix[bestTestAccuracyRawPopIndex][i][a];
                     int sumVertical = 0;
-                    for (int a=0;a<numberOfClasses;a++) sumVertical+=scoreMatrix[bestTestAccIndex][a][i];
-                    float recall = (float)scoreMatrix[bestTestAccIndex][i][i]/(float)sumVertical;
-                    float precision = (float)scoreMatrix[bestTestAccIndex][i][i]/(float)sumHorizontal;
+                    for (int a=0;a<numberOfClasses;a++) sumVertical+=confusionMatrix[bestTestAccuracyRawPopIndex][a][i];
+                    float recall = (float)confusionMatrix[bestTestAccuracyRawPopIndex][i][i] / (float)sumVertical;
+                    float precision = (float)confusionMatrix[bestTestAccuracyRawPopIndex][i][i] / (float)sumHorizontal;
                     float f1Score = ((precision*recall)/(precision+recall))*2;
                     printf("Recall (TPR):%f\n",recall);
                     printf("Precision:%f\n",precision);
@@ -907,16 +942,14 @@ int main(int argc, const char * argv[]) {
             }
 
         }//end loop for test accuracy
-        printf("..Best Test Accuracy (RAW): %f at Iteration %d, Pop %d, with Train acc (RAW):%f\n", bestTestAcc, bestTestAccIteration,
-               bestTestAccIndex,popAcc[bestTestAccIndex]);
-        printf("..Best Test Accuracy (NET): %f at Iteration %d, Pop %d, with Train acc (NET):%f\n", bestTestAccNet, bestTestAccNetIteration,
-               bestTestAccNetIndex,popAccNet[bestTestAccIndex]);
-        testAccOnEachIteration[iterationIndex] = bestTestAccInPop;
+        printf("..Best Test Accuracy (RAW): %f at Iteration %d, Pop %d, with Train Score:%f\n", bestTestAccuracyRaw, bestTestAccuracyRawIteration,
+               bestTestAccuracyRawPopIndex, trainScore[bestTestAccuracyRawPopIndex]);
+        printf("..Best Test Accuracy (NET): %f at Iteration %d, Pop %d, with Train accuracy:%f\n", bestTestAccuracyNet, bestTestAccuracyNetIteration,
+               bestTestAccuracyNetPopIndex, trainAccuracy[bestTestAccuracyRawPopIndex]);
+        testAccuracyOnEachIteration[iterationIndex] = bestTestAccInPop;
 
 
-
-
-        //Now we sort the population based on training accuracies
+        //Now we sort the population based on training score
         float tempValue;
         int tempIndex;
 
@@ -930,13 +963,13 @@ int main(int argc, const char * argv[]) {
         {
             for(int j=0;j<populationSize-i-1;j++)
             {
-                if(popAcc[j]>popAcc[j+1])
+                if(trainScore[j] > trainScore[j + 1])
                 {
-                    tempValue=popAcc[j+1];
+                    tempValue=trainScore[j + 1];
                     tempIndex = sortedPopIndex[j + 1];
-                    popAcc[j+1]=popAcc[j];
+                    trainScore[j + 1]=trainScore[j];
                     sortedPopIndex[j + 1]=sortedPopIndex[j];
-                    popAcc[j]=tempValue;
+                    trainScore[j]=tempValue;
                     sortedPopIndex[j]=tempIndex;
                 }
             }
@@ -949,15 +982,16 @@ int main(int argc, const char * argv[]) {
         int gateCountSorted[populationSize];
         int outputSourceSorted[populationSize][outputCount];
 
-        //Ok, now population accuracies are already sorted and we have the indexes
+        //Ok, now population scores are already sorted, and we have the indexes
         //Now we will form the new population in three steps
         //First we will start with newly created individuals with augmented gates
         //They will fill the slots of the worst population members, coming in the first place
 
+        //We skip this step in NLCv2
         for (int popIndex=0;popIndex<popCountToBeAugmented;popIndex++)
         {
 
-            gateCountSorted[popIndex] = random(1, (int)initialMaxGates);
+            gateCountSorted[popIndex] = random(1, (int)maxGates);
             popBitsSorted[popIndex] = new bool*[gateCountSorted[popIndex]];
             popGateTypeSorted[popIndex] = new int[gateCountSorted[popIndex]];
 
@@ -978,7 +1012,7 @@ int main(int argc, const char * argv[]) {
                 //The length of array is number of inputs+gate index (gateindex+numberOfInputBits)
                 popBitsSorted[popIndex][gateIndex]=new bool [gateIndex + numberOfInputBits];
                 //Generate a random number for connections count
-                int connectionsCount = random(2, connectMax);
+                int connectionsCount = random(2, maxConnections);
                 //Fill connection times true
                 if ((gateIndex+numberOfInputBits)<=connectionsCount)
                 {
@@ -1000,7 +1034,8 @@ int main(int argc, const char * argv[]) {
             }
         }
 
-        //Now, calculate training accuracies of newly introduced population members (wish us luck!)
+        //Now, calculate training scores of newly introduced population members (wish us luck!)
+        //We skip this step in NLCv2
         for (int popIndex = 0; popIndex < popCountToBeAugmented; popIndex++) {
 
             int numberOfCorrect = 0;
@@ -1072,11 +1107,12 @@ int main(int argc, const char * argv[]) {
                 numberOfCorrect+= findMaxSourceValue(y_match_count[yIndex],
                                                      numberOfInputBits + gateCountSorted[popIndex]);
             }
-            popAcc[popIndex] = (float) numberOfCorrect / (float) (numberOfTrainSamples * outputCount);
+            trainScore[popIndex] = (float) numberOfCorrect / (float) (numberOfTrainSamples * outputCount);
         }//end loop for popIndex (Calculate accuracies of newly introduced population members)
 
 
         //Now, move existing population contents to sorted population
+        //We skip this step in NLCv2
         for (int popIndex=popCountToBeAugmented;popIndex<populationSize;popIndex++)
         {
             gateCountSorted[popIndex] = gateCount[sortedPopIndex[popIndex]];
@@ -1118,7 +1154,7 @@ int main(int argc, const char * argv[]) {
             {
                 int randomIndex = random(0,populationSize-1);//Elites can also be selected in the tournament
                 tempTourIndex[i] = randomIndex;
-                tempTourAcc[i] = popAcc[randomIndex];
+                tempTourAcc[i] = trainScore[randomIndex];
             }
             //Find max acc among selected tournament candidates
             //Here, a good thing is, if acc of two pop members is the same, then findMax function selects the one with fewer gates (SPARSITY!)
@@ -1335,7 +1371,7 @@ int main(int argc, const char * argv[]) {
                         //The length of array is number of inputs+gate index (gateindex+numberOfInputBits)
                         popBitsAfterMutation[popIndex][gateIndex]=new bool [gateIndex + numberOfInputBits];
                         //Generate a random number for connections count
-                        int connectionsCount = random(2, connectMax);
+                        int connectionsCount = random(2, maxConnections);
                         //Fill connection times true
                         if ((gateIndex+numberOfInputBits)<=connectionsCount)
                         {
@@ -1425,35 +1461,36 @@ int main(int argc, const char * argv[]) {
     printf("Probability of crossover: %.2f\n",crossoverRate);
     printf("Probability of mutation: %.2f\n", mutationRate);
     printf("Elitism ratio: %.2f\n",elitismRate);
-    printf("Augmentation Ratio: %.2f\n",augmentationPopRate);
-    printf("Augmentation Speed: %.6f\n",augmentationRate);
-    printf("Max Connections: %d\n",connectMax);
+    printf("Max Connections: %d\n", maxConnections);
     printf("Use XOR: ");if (useXOR) printf("Yes\n");else printf("No\n");
-    printf("Train-test split: %.2f\n",train_test_split);
+    printf("Use kFold? ");if (isKFold) printf("Yes\n");else printf("No\n");
+    if (isKFold) printf("Number of folds:%d\n",numberOfK);
+    if (isKFold) printf("Current fold:%d\n",currentFold);
+    if (!isKFold) printf("Train-test split: %.2f\n",train_test_split);
     printf("Seed: %d\n",seed);
 
     printf("\n*************** OVERALL RESULT **********\n");
-    printf("Best found on iteration: %d\n",bestTestAccIteration);
-    printf("Population member: %d\n",bestTestAccIndex);
-    printf("Train accuracy: %f\n",popAcc[bestTestAccIndex]);
-    printf("Test accuracy: %f\n",bestTestAcc);
-    printf("Gate count for best pop: %d\n",gateCount[bestTestAccIndex]);
+    printf("Best found on iteration: %d\n", bestTestAccuracyRawIteration);
+    printf("Population member: %d\n", bestTestAccuracyRawPopIndex);
+    printf("Train score (higher is better): %f\n", trainScore[bestTestAccuracyRawPopIndex]);
+    printf("Test accuracy: %f\n", bestTestAccuracyRaw);
+    printf("Gate count for best pop: %d\n",gateCount[bestTestAccuracyRawPopIndex]);
     printf("--------------------------------------------------\n");
-    for (int gIndex=0;gIndex<gateCount[bestTestAccIndex];gIndex++)
+    for (int gIndex=0;gIndex<gateCount[bestTestAccuracyRawPopIndex]; gIndex++)
     {
         printf("Gate: %d",gIndex);
-        if (gIndex==gateCount[bestTestAccIndex]-1) printf(" (Output gate)");
+        if (gIndex== gateCount[bestTestAccuracyRawPopIndex] - 1) printf(" (Output gate)");
         printf("\n");
-        printf("Gate type: %d\n",popGateType[bestTestAccIndex][gIndex]);
+        printf("Gate type: %d\n",popGateType[bestTestAccuracyRawPopIndex][gIndex]);
         printf("Gate connections:\n");
-        printArray(popBits[bestTestAccIndex][gIndex], gIndex + numberOfInputBits);
+        printArray(popBits[bestTestAccuracyRawPopIndex][gIndex], gIndex + numberOfInputBits);
     }
     printf("\n****************************** Test Acc History *****************************\n");
     for (int accH=0;accH<iterationCount;accH++)
-        printf("%.12f,",testAccOnEachIteration[accH]);
-    printf("\n****************************** Train Acc History *****************************\n");
+        printf("%.12f,", testAccuracyOnEachIteration[accH]);
+    printf("\n****************************** Train Score History *****************************\n");
     for (int accH=0;accH<iterationCount;accH++)
-        printf("%.12f,",trainAccOnEachIteration[accH]);
+        printf("%.12f,", trainScoreOnEachIteration[accH]);
 
 
     return 0;
