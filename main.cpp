@@ -26,7 +26,7 @@ void swap (bool *a, bool *b);
 void randomShuffle (bool arr[], int n);
 void swapInt (int *a, int *b);
 void randomShuffleInt (int arr[], int n);
-void printArray (bool arr[], int n);
+void printArray (bool arr[], int n, int numberofinputbits);
 bool getAndMask(bool maskArray[], bool outputArray[], int n);
 bool getOrMask(bool maskArray[], bool outputArray[], int n);
 bool getNAndMask(bool maskArray[], bool outputArray[], int n);
@@ -142,18 +142,18 @@ int main(int argc, const char * argv[]) {
     }
 
     //Define evaluation method (kFold or train-test split)
-    bool isKFold = true;
+    bool isKFold = false;
 
     //kFold parameters
     int numberOfK = 5;
-    int currentFold=1;
+    int currentFold=0;
     //**** Important Note *******
     //kFold cross validation is managed MANUALLY
     //You have to change the current fold on each run.
     //Record results and calculate MEAN/STD manually
 
     //Train-Test Split variables
-    float train_test_split = 0.75;
+    float train_test_split = 0.8;
 
     //Generic variables for train-test chunks
     int numberOfTrainSamples;
@@ -770,7 +770,7 @@ int main(int argc, const char * argv[]) {
                     printf("\n");
                     printf("Gate type: %d\n",popGateType[bestTrainScoreIndex][gIndex]);
                     printf("Gate connections:\n");
-                    printArray(popBits[bestTrainScoreIndex][gIndex], gIndex + numberOfInputBits);
+                    printArray(popBits[bestTrainScoreIndex][gIndex], gIndex + numberOfInputBits,numberOfInputBits);
                 }
                 printf("*************** End of Printing Gates **********\n");
                 printf("Printing output sources\n");
@@ -902,13 +902,53 @@ int main(int argc, const char * argv[]) {
                 for (int gIndex=0;gIndex<gateCount[bestTestAccuracyRawPopIndex]; gIndex++)
                 {
                     printf("Gate: %d",gIndex);
-                    if (gIndex== gateCount[bestTestAccuracyRawPopIndex] - 1) printf(" (Output gate)");
                     printf("\n");
                     printf("Gate type: %d\n",popGateType[bestTestAccuracyRawPopIndex][gIndex]);
                     printf("Gate connections:\n");
-                    printArray(popBits[bestTestAccuracyRawPopIndex][gIndex], gIndex + numberOfInputBits);
+                    printArray(popBits[bestTestAccuracyRawPopIndex][gIndex], gIndex + numberOfInputBits, numberOfInputBits);
                 }
                 printf("*************** End of Printing Gates **********\n");
+
+                printf("********* Destructed final gates *********\n");
+                bool isGateActive[gateCount[bestTestAccuracyRawPopIndex]];
+                for (int i=0;i<gateCount[bestTestAccuracyRawPopIndex];i++) isGateActive[i]= false;
+                for (int i=0;i<outputCount;i++)
+                {
+                    int outputSourceCurrent = outputSource[bestTestAccuracyRawPopIndex][i];
+                    if (outputSourceCurrent>=numberOfInputBits) {
+                        isGateActive[outputSourceCurrent-numberOfInputBits]= true;
+                        for (int k = numberOfInputBits; k < outputSourceCurrent; k++) {
+                            if (popBits[bestTestAccuracyRawPopIndex][outputSourceCurrent-numberOfInputBits][k]) isGateActive[k-numberOfInputBits] = true;
+                        }
+                    }
+                }
+                int isGateChecked[gateCount[bestTestAccuracyRawPopIndex]];
+                for (int i=gateCount[bestTestAccuracyRawPopIndex]-1;i>=0;i--)
+                {
+                    bool isGateOutput= false;
+                    for (int j=0;j<outputCount;j++)
+                    {
+                        if (i==(outputSource[bestTestAccuracyRawPopIndex][j]-numberOfInputBits))
+                        {
+                            isGateOutput= true;
+                        }
+                    }
+                    printf("index:%d output?%d\n",i,(int)isGateOutput);
+                    if (!isGateOutput && isGateActive[i])
+                    {
+                        for (int k = 0; k < i; k++) {
+                            if (popBits[bestTestAccuracyRawPopIndex][i][k]) isGateActive[k] = true;
+                        }
+                    }
+                }
+
+
+                printf("Number of input bits:%d\n",numberOfInputBits);
+                for (int i=0;i<gateCount[bestTestAccuracyRawPopIndex];i++)
+                {
+                    printf("Is gate active %d:%d\n",i,(int)isGateActive[i]);
+                }
+
                 printf("Printing output sources\n");
                 for (int i=0;i<outputCount;i++)
                     printf("%d ",outputSource[bestTestAccuracyRawPopIndex][i]);
@@ -1483,7 +1523,7 @@ int main(int argc, const char * argv[]) {
         printf("\n");
         printf("Gate type: %d\n",popGateType[bestTestAccuracyRawPopIndex][gIndex]);
         printf("Gate connections:\n");
-        printArray(popBits[bestTestAccuracyRawPopIndex][gIndex], gIndex + numberOfInputBits);
+        printArray(popBits[bestTestAccuracyRawPopIndex][gIndex], gIndex + numberOfInputBits, numberOfInputBits);
     }
     printf("\n****************************** Test Acc History *****************************\n");
     for (int accH=0;accH<iterationCount;accH++)
@@ -1650,10 +1690,11 @@ void randomShuffleInt (int arr[], int n)
 }
 
 //Prints gate connections
-void printArray (bool arr[], int n)
+void printArray (bool arr[], int n, int numberofinputbits)
 {
     for (int i = 0; i < n; i++)
-        printf("%d ", arr[i]);
+        if (i<numberofinputbits) printf("g%d:%d ",i, arr[i]);
+        else printf("g%d:%d ",i-numberofinputbits, arr[i]);
     printf("\n");
 }
 
